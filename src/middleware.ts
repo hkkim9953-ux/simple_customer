@@ -3,7 +3,6 @@ import { SESSION_COOKIE_NAME } from "@/lib/firebase/client-config";
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  const isAuthPage = path === "/login" || path === "/signup";
   const isProtected =
     path === "/mypage" ||
     path.startsWith("/mypage/") ||
@@ -16,22 +15,12 @@ export async function middleware(request: NextRequest) {
 
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
 
+  // /login, /signup은 항상 접근 가능
+  // (쿠키만 있고 무효인 경우에도 가입 화면이 리다이렉트로 막히지 않도록)
   if (isProtected && !hasSession) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("next", path);
-    return NextResponse.redirect(redirectUrl);
-  }
-
-  if (isAuthPage && hasSession) {
-    const redirectUrl = request.nextUrl.clone();
-    const next = request.nextUrl.searchParams.get("next");
-    redirectUrl.pathname =
-      next && next.startsWith("/") && !next.startsWith("//") ? next : "/mypage";
-    redirectUrl.search = "";
-    if (redirectUrl.pathname === "/mypage") {
-      redirectUrl.searchParams.set("notice", "logged-in");
-    }
     return NextResponse.redirect(redirectUrl);
   }
 

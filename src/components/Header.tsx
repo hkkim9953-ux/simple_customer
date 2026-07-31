@@ -80,12 +80,12 @@ export default function Header({ userEmail }: HeaderProps) {
               >
                 로그인
               </Link>
-              <Link
+              <a
                 href="/signup"
-                className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-surface transition-opacity hover:opacity-80"
+                className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-80"
               >
                 회원가입
-              </Link>
+              </a>
             </>
           )}
         </div>
@@ -164,13 +164,13 @@ export default function Header({ userEmail }: HeaderProps) {
                 >
                   로그인
                 </Link>
-                <Link
+                <a
                   href="/signup"
-                  className="rounded-md bg-foreground px-3 py-2.5 text-center text-sm font-medium text-surface transition-opacity hover:opacity-80"
+                  className="rounded-md bg-foreground px-3 py-2.5 text-center text-sm font-medium text-white transition-opacity hover:opacity-80"
                   onClick={() => setOpen(false)}
                 >
                   회원가입
-                </Link>
+                </a>
               </>
             )}
           </div>
