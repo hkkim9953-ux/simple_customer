@@ -1,4 +1,4 @@
-const DEFAULT_PROJECT_ID = "simple-customer";
+const DEFAULT_PROJECT_ID = "simple-customer-3be3c";
 
 export function getFirebaseClientConfig() {
   const config = {
