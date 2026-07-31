@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteAccount } from "@/app/actions/auth";
+import { signOutWithFirebase } from "@/lib/firebase/auth-client";
 
 type DeleteAccountModalProps = {
   open: boolean;
@@ -13,7 +13,6 @@ export default function DeleteAccountModal({
   open,
   onClose,
 }: DeleteAccountModalProps) {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -27,8 +26,14 @@ export default function DeleteAccountModal({
         setError(result.error);
         return;
       }
-      onClose();
-      router.refresh();
+
+      try {
+        await signOutWithFirebase();
+      } catch {
+        // 서버에서 이미 계정/세션을 정리한 뒤일 수 있음
+      }
+
+      window.location.assign("/");
     });
   }
 
@@ -47,12 +52,12 @@ export default function DeleteAccountModal({
           회원탈퇴
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-muted">
-          정말 탈퇴하시겠습니까? 계정과 관련된 데이터가 모두 삭제되며, 이 작업은
-          되돌릴 수 없습니다.
+          정말 탈퇴하시겠습니까? 계정과 관련된 예약·프로필 데이터가 모두
+          삭제되며, 이 작업은 되돌릴 수 없습니다.
         </p>
 
         {error && (
-          <p className="mt-4 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground">
+          <p className="mt-4 rounded-md border border-foreground/30 bg-foreground px-3 py-2.5 text-sm text-white">
             {error}
           </p>
         )}
@@ -70,7 +75,7 @@ export default function DeleteAccountModal({
             type="button"
             onClick={handleConfirm}
             disabled={pending}
-            className="rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-surface transition-opacity hover:opacity-85 disabled:opacity-50"
+            className="rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-50"
           >
             {pending ? "처리 중..." : "탈퇴하기"}
           </button>

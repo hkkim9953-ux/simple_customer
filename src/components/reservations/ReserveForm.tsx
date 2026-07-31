@@ -102,7 +102,7 @@ export default function ReserveForm() {
       </div>
 
       {state.error && (
-        <p className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground">
+        <p className="rounded-md border border-foreground/30 bg-foreground px-3 py-2.5 text-sm text-white">
           {state.error}
         </p>
       )}
@@ -110,7 +110,7 @@ export default function ReserveForm() {
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md bg-foreground px-4 py-3 text-sm font-medium text-surface transition-opacity hover:opacity-85 disabled:opacity-50"
+        className="w-full rounded-md bg-foreground px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-50"
       >
         {pending ? "예약 중..." : "예약하기"}
       </button>

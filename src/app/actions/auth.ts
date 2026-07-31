@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getOptionalSession } from "@/lib/firebase/auth";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase/admin";
 import { SESSION_COOKIE_NAME } from "@/lib/firebase/env";
-import { cookies } from "next/headers";
 
 export type AuthActionState = {
   error?: string;
@@ -70,5 +70,5 @@ export async function deleteAccount(): Promise<AuthActionState> {
   });
 
   revalidatePath("/", "layout");
-  redirect("/");
+  return { success: "계정이 삭제되었습니다." };
 }
