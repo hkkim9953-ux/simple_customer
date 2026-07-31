@@ -74,6 +74,10 @@ export async function POST(request: NextRequest) {
         name,
         phone,
         isAdmin: existing.get("isAdmin") === true,
+        role:
+          existing.get("role") === "admin" || existing.get("isAdmin") === true
+            ? "admin"
+            : existing.get("role") || "customer",
         updatedAt: FieldValue.serverTimestamp(),
         ...(existing.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
       },

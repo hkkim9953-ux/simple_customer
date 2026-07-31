@@ -9,6 +9,8 @@ export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 export type Reservation = {
   id: string;
   userId: string;
+  customerName: string;
+  customerPhone: string;
   reservationDate: string;
   reservationTime: string;
   partySize: number;

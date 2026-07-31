@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireSession, SessionError } from "@/lib/firebase/auth";
+import { requireAdmin } from "@/lib/firebase/admin-auth";
 import { getFirebaseAdminDb } from "@/lib/firebase/admin";
 import {
   RESERVATION_STATUSES,
@@ -45,20 +46,6 @@ function revalidateBookingPaths() {
   revalidatePath("/admin");
 }
 
-async function requireAdmin() {
-  const session = await requireSession();
-  const profile = await getFirebaseAdminDb()
-    .collection("profiles")
-    .doc(session.uid)
-    .get();
-
-  if (profile.get("isAdmin") !== true) {
-    throw new SessionError("관리자만 접근할 수 있습니다.", 403);
-  }
-
-  return session;
-}
-
 export async function createReservation(
   _prev: ReservationActionState,
   formData: FormData,
@@ -87,8 +74,15 @@ export async function createReservation(
       return { error: "메모는 500자 이내로 작성해 주세요." };
     }
 
+    const profile = await getFirebaseAdminDb()
+      .collection("profiles")
+      .doc(session.uid)
+      .get();
+
     await getFirebaseAdminDb().collection("reservations").add({
       userId: session.uid,
+      customerName: String(profile.get("name") ?? session.name ?? "회원"),
+      customerPhone: String(profile.get("phone") ?? ""),
       reservationDate,
       reservationTime,
       partySize,
@@ -113,18 +107,18 @@ export async function createAdminReservation(
   formData: FormData,
 ): Promise<ReservationActionState> {
   try {
-    await requireAdmin();
-    const userId = getString(formData, "user_id");
+    const admin = await requireAdmin();
+    const customerName = getString(formData, "customer_name");
+    const customerPhone = getString(formData, "customer_phone");
     const reservationDate = getString(formData, "reservation_date");
     const reservationTime = getString(formData, "reservation_time");
     const note = getString(formData, "note");
-    const statusRaw = getString(formData, "status") || "CONFIRMED";
-    const partySizeRaw = getString(formData, "party_size") || "1";
-    const partySize = Number(partySizeRaw);
-    const status = normalizeStatus(statusRaw);
 
-    if (!userId) {
-      return { error: "고객을 선택해 주세요." };
+    if (!customerName) {
+      return { error: "고객명을 입력해 주세요." };
+    }
+    if (!customerPhone) {
+      return { error: "연락처를 입력해 주세요." };
     }
     if (!reservationDate || !reservationTime) {
       return { error: "날짜와 시간을 선택해 주세요." };
@@ -132,31 +126,23 @@ export async function createAdminReservation(
     if (!isValidTimeSlot(reservationTime)) {
       return { error: "선택할 수 없는 시간입니다." };
     }
-    if (!Number.isInteger(partySize) || partySize < 1 || partySize > 20) {
-      return { error: "인원은 1~20명까지 가능합니다." };
-    }
     if (reservationDate < todayLocalISODate()) {
       return { error: "지난 날짜로는 예약할 수 없습니다." };
     }
-    if (!isValidStatus(status)) {
-      return { error: "잘못된 상태값입니다." };
-    }
-
-    const profile = await getFirebaseAdminDb()
-      .collection("profiles")
-      .doc(userId)
-      .get();
-    if (!profile.exists) {
-      return { error: "선택한 고객을 찾을 수 없습니다." };
+    if (note.length > 500) {
+      return { error: "메모는 500자 이내로 작성해 주세요." };
     }
 
     await getFirebaseAdminDb().collection("reservations").add({
-      userId,
+      userId: "",
+      customerName: customerName.slice(0, 80),
+      customerPhone: customerPhone.slice(0, 40),
       reservationDate,
       reservationTime,
-      partySize,
+      partySize: 1,
       note,
-      status,
+      status: "CONFIRMED",
+      createdByAdminId: admin.uid,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });

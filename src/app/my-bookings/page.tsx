@@ -25,6 +25,8 @@ export default async function MyBookingsPage() {
       .map((doc) => ({
         id: doc.id,
         userId: String(doc.get("userId")),
+        customerName: String(doc.get("customerName") ?? ""),
+        customerPhone: String(doc.get("customerPhone") ?? ""),
         reservationDate: String(doc.get("reservationDate")),
         reservationTime: String(doc.get("reservationTime")),
         partySize: Number(doc.get("partySize") ?? 1),
