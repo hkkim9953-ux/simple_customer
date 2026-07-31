@@ -6,8 +6,8 @@ import { useState } from "react";
 import { signOut } from "@/app/actions/auth";
 
 const NAV_ITEMS = [
-  { href: "/reserve", label: "예약하기" },
-  { href: "/my-reservations", label: "내 예약" },
+  { href: "/booking", label: "예약하기" },
+  { href: "/my-bookings", label: "내 예약" },
   { href: "/admin", label: "관리자" },
 ] as const;
 

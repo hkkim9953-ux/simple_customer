@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import AdminBookingForm from "@/components/reservations/AdminBookingForm";
 import AdminReservationList from "@/components/reservations/AdminReservationList";
 import { getOptionalSession } from "@/lib/firebase/auth";
 import { getFirebaseAdminDb } from "@/lib/firebase/admin";
 import { timestampToIso } from "@/lib/firebase/timestamps";
-import type {
-  ReservationStatus,
-  ReservationWithProfile,
+import {
+  normalizeStatus,
+  type ReservationWithProfile,
 } from "@/types/reservation";
 
 export default async function AdminPage() {
@@ -37,32 +38,33 @@ export default async function AdminPage() {
   }
 
   let reservations: ReservationWithProfile[] = [];
+  let customers: Array<{ id: string; name: string; email: string }> = [];
   let loadError = false;
 
   try {
-    const snap = await db.collection("reservations").get();
-    const profileIds = [
-      ...new Set(snap.docs.map((doc) => String(doc.get("userId")))),
-    ];
+    const [reservationSnap, profileSnapAll] = await Promise.all([
+      db.collection("reservations").get(),
+      db.collection("profiles").get(),
+    ]);
+
     const profiles = new Map<
       string,
       { name: string; email: string; phone: string }
     >();
 
-    await Promise.all(
-      profileIds.map(async (uid) => {
-        const p = await db.collection("profiles").doc(uid).get();
-        if (p.exists) {
-          profiles.set(uid, {
-            name: String(p.get("name") ?? "이름 없음"),
-            email: String(p.get("email") ?? ""),
-            phone: String(p.get("phone") ?? ""),
-          });
-        }
-      }),
-    );
+    customers = profileSnapAll.docs
+      .map((doc) => {
+        const profile = {
+          name: String(doc.get("name") ?? "이름 없음"),
+          email: String(doc.get("email") ?? ""),
+          phone: String(doc.get("phone") ?? ""),
+        };
+        profiles.set(doc.id, profile);
+        return { id: doc.id, name: profile.name, email: profile.email };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 
-    reservations = snap.docs
+    reservations = reservationSnap.docs
       .map((doc) => {
         const userId = String(doc.get("userId"));
         return {
@@ -72,7 +74,7 @@ export default async function AdminPage() {
           reservationTime: String(doc.get("reservationTime")),
           partySize: Number(doc.get("partySize") ?? 1),
           note: String(doc.get("note") ?? ""),
-          status: doc.get("status") as ReservationStatus,
+          status: normalizeStatus(doc.get("status")),
           createdAt: timestampToIso(doc.get("createdAt")),
           updatedAt: timestampToIso(doc.get("updatedAt")),
           profile: profiles.get(userId) ?? null,
@@ -96,12 +98,14 @@ export default async function AdminPage() {
         예약 관리
       </h1>
       <p className="mt-2 text-sm text-muted">
-        전체 예약을 확인하고 상태를 변경합니다.
+        전체 예약을 조회·등록·취소할 수 있습니다.
       </p>
 
+      <AdminBookingForm customers={customers} />
+
       {loadError ? (
-        <p className="mt-8 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground">
-          예약 목록을 불러오지 못했습니다. Firebase 설정을 확인해 주세요.
+        <p className="mt-8 rounded-md border border-foreground/30 bg-foreground px-3 py-2.5 text-sm text-white">
+          예약 목록을 불러오지 못했습니다.
         </p>
       ) : (
         <AdminReservationList reservations={reservations} />

@@ -27,8 +27,8 @@ export default function Hero() {
 
         <div className="animate-fade-up animate-delay-3 mt-10">
           <Link
-            href="/reserve"
-            className="inline-flex items-center gap-2 rounded-md bg-foreground px-6 py-3.5 text-sm font-medium text-surface transition-all hover:gap-3 hover:opacity-85"
+            href="/booking"
+            className="inline-flex items-center gap-2 rounded-md bg-foreground px-6 py-3.5 text-sm font-medium text-white transition-all hover:gap-3 hover:opacity-85"
           >
             예약하러 가기
             <span aria-hidden="true">→</span>

@@ -1,7 +1,7 @@
 export const RESERVATION_STATUSES = [
-  "pending",
-  "confirmed",
-  "cancelled",
+  "PENDING",
+  "CONFIRMED",
+  "CANCELLED",
 ] as const;
 
 export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
@@ -40,7 +40,20 @@ export const TIME_SLOTS = [
 ] as const;
 
 export const STATUS_LABELS: Record<ReservationStatus, string> = {
-  pending: "대기",
-  confirmed: "확정",
-  cancelled: "취소",
+  PENDING: "대기",
+  CONFIRMED: "확정",
+  CANCELLED: "취소",
 };
+
+/** 기존 소문자 상태값과 신규 대문자 상태를 모두 정규화 */
+export function normalizeStatus(raw: unknown): ReservationStatus {
+  const value = String(raw ?? "PENDING").trim().toUpperCase();
+  if (value === "PENDING" || value === "CONFIRMED" || value === "CANCELLED") {
+    return value;
+  }
+  return "PENDING";
+}
+
+export function isActiveReservation(status: ReservationStatus) {
+  return status === "PENDING" || status === "CONFIRMED";
+}

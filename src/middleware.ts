@@ -6,8 +6,12 @@ export async function middleware(request: NextRequest) {
   const isProtected =
     path === "/mypage" ||
     path.startsWith("/mypage/") ||
+    path === "/my-bookings" ||
+    path.startsWith("/my-bookings/") ||
     path === "/my-reservations" ||
     path.startsWith("/my-reservations/") ||
+    path === "/booking" ||
+    path.startsWith("/booking/") ||
     path === "/reserve" ||
     path.startsWith("/reserve/") ||
     path === "/admin" ||
@@ -15,8 +19,6 @@ export async function middleware(request: NextRequest) {
 
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
 
-  // /login, /signup은 항상 접근 가능
-  // (쿠키만 있고 무효인 경우에도 가입 화면이 리다이렉트로 막히지 않도록)
   if (isProtected && !hasSession) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
