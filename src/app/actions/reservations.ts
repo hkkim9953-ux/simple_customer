@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { requireSession, SessionError } from "@/lib/firebase/auth";
 import { requireAdmin } from "@/lib/firebase/admin-auth";
 import { getFirebaseAdminDb } from "@/lib/firebase/admin";
@@ -17,6 +17,13 @@ export type ReservationActionState = {
   error?: string;
   success?: string;
 };
+
+class SlotConflictError extends Error {
+  constructor(message = "이미 예약된 시간대입니다. 다른 시간을 선택해 주세요.") {
+    super(message);
+    this.name = "SlotConflictError";
+  }
+}
 
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -46,15 +53,40 @@ function revalidateBookingPaths() {
   revalidatePath("/admin");
 }
 
-async function getActiveBookedTimes(reservationDate: string) {
-  const snap = await getFirebaseAdminDb()
-    .collection("reservations")
-    .where("reservationDate", "==", reservationDate)
-    .get();
+function slotDocId(date: string, time: string) {
+  return `${date}_${time}`;
+}
 
-  return snap.docs
-    .filter((doc) => normalizeStatus(doc.get("status")) !== "CANCELLED")
-    .map((doc) => String(doc.get("reservationTime")));
+function slotRef(db: Firestore, date: string, time: string) {
+  return db.collection("reservation_slots").doc(slotDocId(date, time));
+}
+
+async function getActiveBookedTimes(reservationDate: string) {
+  const db = getFirebaseAdminDb();
+  const [reservationSnap, slotSnap] = await Promise.all([
+    db
+      .collection("reservations")
+      .where("reservationDate", "==", reservationDate)
+      .get(),
+    db
+      .collection("reservation_slots")
+      .where("reservationDate", "==", reservationDate)
+      .get(),
+  ]);
+
+  const times = new Set<string>();
+
+  for (const doc of reservationSnap.docs) {
+    if (normalizeStatus(doc.get("status")) !== "CANCELLED") {
+      times.add(String(doc.get("reservationTime")));
+    }
+  }
+
+  for (const doc of slotSnap.docs) {
+    times.add(String(doc.get("reservationTime")));
+  }
+
+  return [...times];
 }
 
 export async function getBookedTimesForDate(date: string): Promise<string[]> {
@@ -67,12 +99,71 @@ export async function getBookedTimesForDate(date: string): Promise<string[]> {
   }
 }
 
-async function assertSlotAvailable(date: string, time: string) {
-  const booked = await getActiveBookedTimes(date);
-  if (booked.includes(time)) {
-    return "이미 예약된 시간대입니다. 다른 시간을 선택해 주세요.";
-  }
-  return null;
+type CreateLockedReservationInput = {
+  userId: string;
+  customerName: string;
+  customerPhone: string;
+  reservationDate: string;
+  reservationTime: string;
+  partySize: number;
+  note: string;
+  status: ReservationStatus;
+  createdByAdminId?: string;
+};
+
+async function createLockedReservation(input: CreateLockedReservationInput) {
+  const db = getFirebaseAdminDb();
+  const reservationRef = db.collection("reservations").doc();
+  const lockRef = slotRef(db, input.reservationDate, input.reservationTime);
+
+  await db.runTransaction(async (tx) => {
+    const lockSnap = await tx.get(lockRef);
+    if (lockSnap.exists) {
+      throw new SlotConflictError();
+    }
+
+    tx.set(reservationRef, {
+      userId: input.userId,
+      customerName: input.customerName,
+      customerPhone: input.customerPhone,
+      reservationDate: input.reservationDate,
+      reservationTime: input.reservationTime,
+      partySize: input.partySize,
+      note: input.note,
+      status: input.status,
+      slotId: slotDocId(input.reservationDate, input.reservationTime),
+      ...(input.createdByAdminId
+        ? { createdByAdminId: input.createdByAdminId }
+        : {}),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    tx.set(lockRef, {
+      reservationId: reservationRef.id,
+      reservationDate: input.reservationDate,
+      reservationTime: input.reservationTime,
+      status: "LOCKED",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+
+  return reservationRef.id;
+}
+
+async function releaseSlotLock(date: string, time: string, reservationId: string) {
+  const db = getFirebaseAdminDb();
+  const lockRef = slotRef(db, date, time);
+
+  await db.runTransaction(async (tx) => {
+    const lockSnap = await tx.get(lockRef);
+    if (!lockSnap.exists) return;
+
+    const owner = String(lockSnap.get("reservationId") ?? "");
+    if (owner && owner !== reservationId) return;
+
+    tx.delete(lockRef);
+  });
 }
 
 export async function createReservation(
@@ -103,17 +194,12 @@ export async function createReservation(
       return { error: "메모는 500자 이내로 작성해 주세요." };
     }
 
-    const conflict = await assertSlotAvailable(reservationDate, reservationTime);
-    if (conflict) {
-      return { error: conflict };
-    }
-
     const profile = await getFirebaseAdminDb()
       .collection("profiles")
       .doc(session.uid)
       .get();
 
-    await getFirebaseAdminDb().collection("reservations").add({
+    await createLockedReservation({
       userId: session.uid,
       customerName: String(profile.get("name") ?? session.name ?? "회원"),
       customerPhone: String(profile.get("phone") ?? ""),
@@ -122,13 +208,14 @@ export async function createReservation(
       partySize,
       note,
       status: "PENDING",
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
     });
 
     revalidateBookingPaths();
     redirect("/my-bookings?toast=booked");
   } catch (error) {
+    if (error instanceof SlotConflictError) {
+      return { error: error.message };
+    }
     if (error instanceof SessionError) {
       return { error: error.message };
     }
@@ -167,12 +254,7 @@ export async function createAdminReservation(
       return { error: "메모는 500자 이내로 작성해 주세요." };
     }
 
-    const conflict = await assertSlotAvailable(reservationDate, reservationTime);
-    if (conflict) {
-      return { error: conflict };
-    }
-
-    await getFirebaseAdminDb().collection("reservations").add({
+    await createLockedReservation({
       userId: "",
       customerName: customerName.slice(0, 80),
       customerPhone: customerPhone.slice(0, 40),
@@ -182,13 +264,14 @@ export async function createAdminReservation(
       note,
       status: "CONFIRMED",
       createdByAdminId: admin.uid,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
     });
 
     revalidateBookingPaths();
     return { success: "예약을 등록했습니다." };
   } catch (error) {
+    if (error instanceof SlotConflictError) {
+      return { error: error.message };
+    }
     if (error instanceof SessionError) {
       return { error: error.message };
     }
@@ -226,6 +309,12 @@ export async function cancelMyReservation(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    await releaseSlotLock(
+      String(snap.get("reservationDate")),
+      String(snap.get("reservationTime")),
+      reservationId,
+    );
+
     revalidateBookingPaths();
     return { success: "예약이 취소되었습니다." };
   } catch (error) {
@@ -257,10 +346,52 @@ export async function updateReservationStatus(
       return { error: "예약을 찾을 수 없습니다." };
     }
 
-    await ref.update({
-      status: nextStatus,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    const previous = normalizeStatus(snap.get("status"));
+    const date = String(snap.get("reservationDate"));
+    const time = String(snap.get("reservationTime"));
+
+    if (nextStatus !== "CANCELLED" && previous === "CANCELLED") {
+      // 취소된 예약을 다시 살릴 때도 슬롯 충돌을 막습니다.
+      try {
+        const db = getFirebaseAdminDb();
+        const lockRef = slotRef(db, date, time);
+        await db.runTransaction(async (tx) => {
+          const lockSnap = await tx.get(lockRef);
+          if (lockSnap.exists) {
+            const owner = String(lockSnap.get("reservationId") ?? "");
+            if (owner !== reservationId) {
+              throw new SlotConflictError();
+            }
+          } else {
+            tx.set(lockRef, {
+              reservationId,
+              reservationDate: date,
+              reservationTime: time,
+              status: "LOCKED",
+              createdAt: FieldValue.serverTimestamp(),
+            });
+          }
+          tx.update(ref, {
+            status: nextStatus,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        });
+      } catch (error) {
+        if (error instanceof SlotConflictError) {
+          return { error: error.message };
+        }
+        throw error;
+      }
+    } else {
+      await ref.update({
+        status: nextStatus,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      if (nextStatus === "CANCELLED") {
+        await releaseSlotLock(date, time, reservationId);
+      }
+    }
 
     revalidateBookingPaths();
     return { success: "예약 상태가 변경되었습니다." };
