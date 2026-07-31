@@ -6,7 +6,7 @@ import { timestampToIso } from "@/lib/firebase/timestamps";
 import type { Profile } from "@/types/profile";
 
 type MyPageProps = {
-  searchParams?: Promise<{ joined?: string }>;
+  searchParams?: Promise<{ joined?: string; notice?: string }>;
 };
 
 export default async function MyPage({ searchParams }: MyPageProps) {
@@ -17,6 +17,7 @@ export default async function MyPage({ searchParams }: MyPageProps) {
 
   const params = searchParams ? await searchParams : {};
   const justJoined = params.joined === "1";
+  const alreadyLoggedIn = params.notice === "logged-in";
 
   const snap = await getFirebaseAdminDb()
     .collection("profiles")
@@ -51,6 +52,11 @@ export default async function MyPage({ searchParams }: MyPageProps) {
       {justJoined && (
         <p className="mt-6 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-foreground">
           회원가입이 완료되었습니다. 환영합니다!
+        </p>
+      )}
+      {alreadyLoggedIn && !justJoined && (
+        <p className="mt-6 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-foreground">
+          이미 로그인되어 있습니다. 다른 계정으로 가입하려면 먼저 로그아웃해 주세요.
         </p>
       )}
       <MyPageClient profile={profile} />

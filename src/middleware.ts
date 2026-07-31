@@ -27,8 +27,11 @@ export async function middleware(request: NextRequest) {
     const redirectUrl = request.nextUrl.clone();
     const next = request.nextUrl.searchParams.get("next");
     redirectUrl.pathname =
-      next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      next && next.startsWith("/") && !next.startsWith("//") ? next : "/mypage";
     redirectUrl.search = "";
+    if (redirectUrl.pathname === "/mypage") {
+      redirectUrl.searchParams.set("notice", "logged-in");
+    }
     return NextResponse.redirect(redirectUrl);
   }
 
