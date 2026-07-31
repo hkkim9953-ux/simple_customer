@@ -25,9 +25,7 @@ export default async function AdminPage() {
           관리자
         </h1>
         <p className="mt-3 max-w-lg text-sm text-muted">
-          관리자 권한이 없습니다. Firestore{" "}
-          <code className="text-foreground">profiles/&#123;uid&#125;.isAdmin</code>
-          을 <code className="text-foreground">true</code>로 설정해 주세요.
+          관리자 권한이 없습니다.
         </p>
         <p className="mt-8 text-xs text-muted">
           <Link href="/" className="hover:text-foreground">
