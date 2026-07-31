@@ -5,34 +5,7 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SECONDS,
 } from "@/lib/firebase/env";
-
-function isTrustedOrigin(request: NextRequest) {
-  const host = request.headers.get("host");
-  const origin = request.headers.get("origin");
-  const site = request.headers.get("sec-fetch-site");
-
-  // Same-origin browser requests sometimes omit Origin; Sec-Fetch-Site is enough.
-  if (site === "same-origin") return true;
-
-  if (origin && host) {
-    try {
-      return new URL(origin).host === host;
-    } catch {
-      return false;
-    }
-  }
-
-  const referer = request.headers.get("referer");
-  if (referer && host) {
-    try {
-      return new URL(referer).host === host;
-    } catch {
-      return false;
-    }
-  }
-
-  return process.env.NODE_ENV !== "production";
-}
+import { isTrustedOrigin } from "@/lib/http/origin";
 
 export async function POST(request: NextRequest) {
   if (!isTrustedOrigin(request)) {

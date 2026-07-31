@@ -2,16 +2,21 @@
 
 import {
   createUserWithEmailAndPassword,
+  signInWithCustomToken,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   updateProfile,
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase/client";
+import { loginWithKakaoSdk } from "@/lib/kakao/client";
 
-async function createServerSession(idToken: string, profile?: {
-  name?: string;
-  phone?: string;
-}) {
+async function createServerSession(
+  idToken: string,
+  profile?: {
+    name?: string;
+    phone?: string;
+  },
+) {
   const response = await fetch("/api/auth/session", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -84,6 +89,41 @@ export async function signUpWithFirebase(input: {
     await createServerSession(idToken, {
       name: input.name,
       phone: input.phone,
+    });
+  } catch (error) {
+    throw new Error(toKoreanError(error));
+  }
+}
+
+export async function signInWithKakao() {
+  try {
+    const accessToken = await loginWithKakaoSdk();
+    const response = await fetch("/api/auth/kakao", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accessToken }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as
+      | {
+          customToken?: string;
+          profile?: { name?: string; phone?: string };
+          error?: string;
+        }
+      | null;
+
+    if (!response.ok || !payload?.customToken) {
+      throw new Error(payload?.error ?? "카카오 로그인에 실패했습니다.");
+    }
+
+    const credential = await signInWithCustomToken(
+      getFirebaseAuth(),
+      payload.customToken,
+    );
+    const idToken = await credential.user.getIdToken(true);
+    await createServerSession(idToken, {
+      name: payload.profile?.name,
+      phone: payload.profile?.phone,
     });
   } catch (error) {
     throw new Error(toKoreanError(error));
