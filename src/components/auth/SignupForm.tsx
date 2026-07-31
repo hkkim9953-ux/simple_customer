@@ -37,6 +37,7 @@ export default function SignupForm() {
     try {
       await signUpWithFirebase({ email, password, name, phone });
       setSuccess(true);
+      window.sessionStorage.setItem("sr_toast", "signup");
       window.location.assign("/mypage?joined=1");
     } catch (err) {
       setError(err instanceof Error ? err.message : "회원가입에 실패했습니다.");

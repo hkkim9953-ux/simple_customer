@@ -2,8 +2,10 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   createAdminReservation,
+  getBookedTimesForDate,
   updateReservationStatus,
   type ReservationActionState,
 } from "@/app/actions/reservations";
@@ -27,11 +29,13 @@ type AdminDashboardProps = {
 
 export default function AdminDashboard({ reservations }: AdminDashboardProps) {
   const router = useRouter();
+  const today = minDate();
   const [modalOpen, setModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [modalDate, setModalDate] = useState(today);
+  const [bookedTimes, setBookedTimes] = useState<string[]>([]);
   const [formState, formAction, formPending] = useActionState(
     createAdminReservation,
     initialState,
@@ -39,22 +43,37 @@ export default function AdminDashboard({ reservations }: AdminDashboardProps) {
 
   useEffect(() => {
     if (formState.success) {
-      setMessage(formState.success);
+      toast.success("예약을 등록했습니다.");
       setModalOpen(false);
       router.refresh();
     }
   }, [formState.success, router]);
 
+  useEffect(() => {
+    if (!modalOpen) return;
+    let cancelled = false;
+    getBookedTimesForDate(modalDate).then((times) => {
+      if (!cancelled) setBookedTimes(times);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [modalDate, modalOpen]);
+
   function handleStatus(id: string, status: "CONFIRMED" | "CANCELLED") {
     setError(null);
-    setMessage(null);
     setPendingKey(`${id}:${status}`);
     startTransition(async () => {
       const result = await updateReservationStatus(id, status);
       if (result.error) {
         setError(result.error);
-      } else if (result.success) {
-        setMessage(result.success);
+        toast.error(result.error);
+      } else {
+        toast.success(
+          status === "CONFIRMED"
+            ? "예약을 승인했습니다."
+            : "예약을 취소했습니다.",
+        );
       }
       setPendingKey(null);
       router.refresh();
@@ -69,6 +88,7 @@ export default function AdminDashboard({ reservations }: AdminDashboardProps) {
           type="button"
           onClick={() => {
             setError(null);
+            setModalDate(today);
             setModalOpen(true);
           }}
           className="rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85"
@@ -80,17 +100,6 @@ export default function AdminDashboard({ reservations }: AdminDashboardProps) {
       {error && (
         <p className="rounded-md border border-foreground/30 bg-foreground px-3 py-2.5 text-sm text-white">
           {error}
-        </p>
-      )}
-      {(message || formState.error) && (
-        <p
-          className={`rounded-md border px-3 py-2.5 text-sm ${
-            formState.error
-              ? "border-foreground/30 bg-foreground text-white"
-              : "border-border bg-background text-foreground"
-          }`}
-        >
-          {formState.error || message}
         </p>
       )}
 
@@ -118,13 +127,9 @@ export default function AdminDashboard({ reservations }: AdminDashboardProps) {
             ) : (
               reservations.map((item) => {
                 const name =
-                  item.customerName ||
-                  item.profile?.name ||
-                  "이름 없음";
+                  item.customerName || item.profile?.name || "이름 없음";
                 const phone =
-                  item.customerPhone ||
-                  item.profile?.phone ||
-                  "-";
+                  item.customerPhone || item.profile?.phone || "-";
                 const approveBusy =
                   isPending && pendingKey === `${item.id}:CONFIRMED`;
                 const cancelBusy =
@@ -243,7 +248,9 @@ export default function AdminDashboard({ reservations }: AdminDashboardProps) {
                     name="reservation_date"
                     type="date"
                     required
-                    min={minDate()}
+                    min={today}
+                    value={modalDate}
+                    onChange={(event) => setModalDate(event.target.value)}
                     className="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2.5 text-sm outline-none focus:border-foreground"
                   />
                 </div>
@@ -264,11 +271,15 @@ export default function AdminDashboard({ reservations }: AdminDashboardProps) {
                     <option value="" disabled>
                       선택
                     </option>
-                    {TIME_SLOTS.map((slot) => (
-                      <option key={slot} value={slot}>
-                        {slot}
-                      </option>
-                    ))}
+                    {TIME_SLOTS.map((slot) => {
+                      const booked = bookedTimes.includes(slot);
+                      return (
+                        <option key={slot} value={slot} disabled={booked}>
+                          {slot}
+                          {booked ? " (마감)" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>

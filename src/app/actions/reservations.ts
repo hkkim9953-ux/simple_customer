@@ -46,6 +46,35 @@ function revalidateBookingPaths() {
   revalidatePath("/admin");
 }
 
+async function getActiveBookedTimes(reservationDate: string) {
+  const snap = await getFirebaseAdminDb()
+    .collection("reservations")
+    .where("reservationDate", "==", reservationDate)
+    .get();
+
+  return snap.docs
+    .filter((doc) => normalizeStatus(doc.get("status")) !== "CANCELLED")
+    .map((doc) => String(doc.get("reservationTime")));
+}
+
+export async function getBookedTimesForDate(date: string): Promise<string[]> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
+  try {
+    await requireSession();
+    return await getActiveBookedTimes(date);
+  } catch {
+    return [];
+  }
+}
+
+async function assertSlotAvailable(date: string, time: string) {
+  const booked = await getActiveBookedTimes(date);
+  if (booked.includes(time)) {
+    return "이미 예약된 시간대입니다. 다른 시간을 선택해 주세요.";
+  }
+  return null;
+}
+
 export async function createReservation(
   _prev: ReservationActionState,
   formData: FormData,
@@ -74,6 +103,11 @@ export async function createReservation(
       return { error: "메모는 500자 이내로 작성해 주세요." };
     }
 
+    const conflict = await assertSlotAvailable(reservationDate, reservationTime);
+    if (conflict) {
+      return { error: conflict };
+    }
+
     const profile = await getFirebaseAdminDb()
       .collection("profiles")
       .doc(session.uid)
@@ -93,7 +127,7 @@ export async function createReservation(
     });
 
     revalidateBookingPaths();
-    redirect("/my-bookings");
+    redirect("/my-bookings?toast=booked");
   } catch (error) {
     if (error instanceof SessionError) {
       return { error: error.message };
@@ -131,6 +165,11 @@ export async function createAdminReservation(
     }
     if (note.length > 500) {
       return { error: "메모는 500자 이내로 작성해 주세요." };
+    }
+
+    const conflict = await assertSlotAvailable(reservationDate, reservationTime);
+    if (conflict) {
+      return { error: conflict };
     }
 
     await getFirebaseAdminDb().collection("reservations").add({

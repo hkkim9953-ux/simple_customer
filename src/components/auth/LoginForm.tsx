@@ -33,6 +33,7 @@ export default function LoginForm({ nextPath }: LoginFormProps) {
     try {
       await signInWithFirebase(email, password);
       setSuccess(true);
+      window.sessionStorage.setItem("sr_toast", "login");
       const target =
         nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")
           ? nextPath

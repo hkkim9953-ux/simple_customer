@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { cancelMyReservation } from "@/app/actions/reservations";
 import {
   STATUS_LABELS,
@@ -45,6 +46,9 @@ export default function MyBookingCards({ reservations }: MyBookingCardsProps) {
       const result = await cancelMyReservation(id);
       if (result.error) {
         setError(result.error);
+        toast.error(result.error);
+      } else {
+        toast.success("예약이 취소되었습니다.");
       }
       setPendingId(null);
       router.refresh();

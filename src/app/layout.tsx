@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Noto_Sans_KR } from "next/font/google";
+import AppToaster from "@/components/AppToaster";
 import Header from "@/components/Header";
 import { getOptionalSession } from "@/lib/firebase/auth";
 import "./globals.css";
@@ -34,6 +36,9 @@ export default async function RootLayout({
       <body className="flex min-h-full flex-col bg-background font-sans text-foreground">
         <Header userEmail={userEmail} />
         {children}
+        <Suspense fallback={null}>
+          <AppToaster />
+        </Suspense>
       </body>
     </html>
   );

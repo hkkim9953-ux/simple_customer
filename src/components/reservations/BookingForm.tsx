@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import {
   createReservation,
+  getBookedTimesForDate,
   type ReservationActionState,
 } from "@/app/actions/reservations";
 import DateCalendar from "@/components/reservations/DateCalendar";
@@ -24,6 +25,26 @@ export default function BookingForm() {
   const today = minDate();
   const [date, setDate] = useState(today);
   const [time, setTime] = useState("");
+  const [bookedTimes, setBookedTimes] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingSlots(true);
+    setTime("");
+
+    getBookedTimesForDate(date)
+      .then((times) => {
+        if (!cancelled) setBookedTimes(times);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSlots(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [date]);
 
   return (
     <form action={formAction} className="mt-8 space-y-6">
@@ -34,7 +55,11 @@ export default function BookingForm() {
       <div>
         <p className="text-sm font-medium text-foreground">날짜 선택</p>
         <div className="mt-3">
-          <DateCalendar value={date} onChange={setDate} minDate={today} />
+          <DateCalendar
+            value={date}
+            onChange={setDate}
+            minDate={today}
+          />
         </div>
         <p className="mt-2 text-xs text-muted">선택일: {date}</p>
       </div>
@@ -43,23 +68,33 @@ export default function BookingForm() {
         <p className="text-sm font-medium text-foreground">시간대 선택</p>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
           {TIME_SLOTS.map((slot) => {
+            const booked = bookedTimes.includes(slot);
             const active = time === slot;
             return (
               <button
                 key={slot}
                 type="button"
+                disabled={booked || loadingSlots}
                 onClick={() => setTime(slot)}
-                className={`rounded-md px-3 py-2.5 text-sm transition-colors ${
+                className={`rounded-md px-3 py-2.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                   active
                     ? "bg-foreground text-white"
                     : "border border-border text-foreground hover:bg-background"
                 }`}
               >
                 {slot}
+                {booked ? " · 마감" : ""}
               </button>
             );
           })}
         </div>
+        {loadingSlots ? (
+          <p className="mt-2 text-xs text-muted">예약 가능 시간 확인 중…</p>
+        ) : bookedTimes.length === TIME_SLOTS.length ? (
+          <p className="mt-2 text-xs text-muted">
+            선택한 날짜는 예약 가능한 시간이 없습니다.
+          </p>
+        ) : null}
       </div>
 
       <div>
