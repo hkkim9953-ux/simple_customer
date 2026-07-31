@@ -5,11 +5,18 @@ import { getFirebaseAdminDb } from "@/lib/firebase/admin";
 import { timestampToIso } from "@/lib/firebase/timestamps";
 import type { Profile } from "@/types/profile";
 
-export default async function MyPage() {
+type MyPageProps = {
+  searchParams?: Promise<{ joined?: string }>;
+};
+
+export default async function MyPage({ searchParams }: MyPageProps) {
   const session = await getOptionalSession();
   if (!session) {
     redirect("/login?next=/mypage");
   }
+
+  const params = searchParams ? await searchParams : {};
+  const justJoined = params.joined === "1";
 
   const snap = await getFirebaseAdminDb()
     .collection("profiles")
@@ -41,6 +48,11 @@ export default async function MyPage() {
         마이페이지
       </h1>
       <p className="mt-2 text-sm text-muted">계정 정보를 확인합니다.</p>
+      {justJoined && (
+        <p className="mt-6 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-foreground">
+          회원가입이 완료되었습니다. 환영합니다!
+        </p>
+      )}
       <MyPageClient profile={profile} />
     </main>
   );

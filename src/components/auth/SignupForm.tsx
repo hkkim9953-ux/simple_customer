@@ -23,11 +23,10 @@ export default function SignupForm() {
 
     try {
       await signUpWithFirebase({ email, password, name, phone });
-      router.replace("/");
+      router.replace("/mypage?joined=1");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "회원가입에 실패했습니다.");
-    } finally {
       setPending(false);
     }
   }
